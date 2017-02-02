@@ -1,0 +1,153 @@
+<?xml version='1.0'?>
+<Devices>
+	<Device type='relay' id='localDisk'>
+		<Name>Local Disk</Name>
+		<ConfigUI>
+			<Field type='textfield' id='volumeName'>
+				<Label>Volume name:</Label>
+			</Field>
+            <Field type='checkbox' id='preventSleep'>
+                <Label>Prevent disk sleep:</Label>
+            </Field>
+            <Field type='checkbox' id='forceUnmount'>
+                <Label>Force unmount:</Label>
+                <Description>(may result in loss of data)</Description>
+            </Field>
+		</ConfigUI>
+        <States>
+            <State id='sizeTotal'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Total Size</TriggerLabel>
+                <ControlPageLabel>Total Size</ControlPageLabel>
+            </State>
+            <State id='megsTotal'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Total Megabytes</TriggerLabel>
+                <ControlPageLabel>Total Megabytes</ControlPageLabel>
+            </State>
+            <State id='sizeUsed'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Used Size</TriggerLabel>
+                <ControlPageLabel>Used Size</ControlPageLabel>
+            </State>
+            <State id='megsUsed'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Used Megabytes</TriggerLabel>
+                <ControlPageLabel>Used Megabytes</ControlPageLabel>
+            </State>
+            <State id='sizeFree'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Free Size</TriggerLabel>
+                <ControlPageLabel>Free Size</ControlPageLabel>
+            </State>
+            <State id='megsFree'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Free Megabytes</TriggerLabel>
+                <ControlPageLabel>Free Megabytes</ControlPageLabel>
+            </State>
+            <State id='percUsed'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Percent Used</TriggerLabel>
+                <ControlPageLabel>Percent Used</ControlPageLabel>
+            </State>
+            <State id='percFree'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Percent Free</TriggerLabel>
+                <ControlPageLabel>Percent Free</ControlPageLabel>
+            </State>
+            <State id='filesystem'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Disk Device</TriggerLabel>
+                <ControlPageLabel>Disk Device</ControlPageLabel>
+            </State>
+            <State id='diskType'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Disk Type</TriggerLabel>
+                <ControlPageLabel>Disk Type</ControlPageLabel>
+            </State>
+            <State id='lastTouch'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Last Touch</TriggerLabel>
+                <ControlPageLabel>Last Touch</ControlPageLabel>
+            </State>
+        </States>
+	</Device>
+	<Device type='relay' id='networkDisk'>
+		<Name>Network Disk</Name>
+		<ConfigUI>
+			<Field type='textfield' id='volumeName'>
+				<Label>Volume name:</Label>
+			</Field>
+			<Field type="textfield" id="volumeURL">
+				<Label>Volume URL:</Label>
+			</Field>
+            <Field type='label' id='urlHelp' fontColor='darkgray' fontSize='small' alignWithControl='true'>
+			    <Label>Embed 'user:pass@' if authentication required</Label>
+            </Field>
+            <Field type='checkbox' id='preventSleep'>
+                <Label>Prevent disk sleep:</Label>
+            </Field>
+            <Field type='checkbox' id='forceUnmount'>
+                <Label>Force unmount:</Label>
+                <Description>(may result in loss of data)</Description>
+            </Field>
+		</ConfigUI>
+        <States>
+            <State id='sizeTotal'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Total Size</TriggerLabel>
+                <ControlPageLabel>Total Size</ControlPageLabel>
+            </State>
+            <State id='megsTotal'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Total Megabytes</TriggerLabel>
+                <ControlPageLabel>Total Megabytes</ControlPageLabel>
+            </State>
+            <State id='sizeUsed'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Used Size</TriggerLabel>
+                <ControlPageLabel>Used Size</ControlPageLabel>
+            </State>
+            <State id='megsUsed'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Used Megabytes</TriggerLabel>
+                <ControlPageLabel>Used Megabytes</ControlPageLabel>
+            </State>
+            <State id='sizeFree'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Free Size</TriggerLabel>
+                <ControlPageLabel>Free Size</ControlPageLabel>
+            </State>
+            <State id='megsFree'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Free Megabytes</TriggerLabel>
+                <ControlPageLabel>Free Megabytes</ControlPageLabel>
+            </State>
+            <State id='percUsed'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Percent Used</TriggerLabel>
+                <ControlPageLabel>Percent Used</ControlPageLabel>
+            </State>
+            <State id='percFree'>
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Percent Free</TriggerLabel>
+                <ControlPageLabel>Percent Free</ControlPageLabel>
+            </State>
+            <State id='filesystem'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Disk Device</TriggerLabel>
+                <ControlPageLabel>Disk Device</ControlPageLabel>
+            </State>
+            <State id='diskType'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Disk Type</TriggerLabel>
+                <ControlPageLabel>Disk Type</ControlPageLabel>
+            </State>
+            <State id='lastTouch'>
+                <ValueType>String</ValueType>
+                <TriggerLabel>Last Touch</TriggerLabel>
+                <ControlPageLabel>Last Touch</ControlPageLabel>
+            </State>
+        </States>
+	</Device>
+</Devices>
