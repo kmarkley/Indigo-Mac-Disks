@@ -3,6 +3,7 @@
     <Field id='stateLoopFreq' type='menu' defaultValue='10'>
         <Label>Update frequency:</Label>
         <List>
+            <Option value='2'>2 Seconds</Option>
             <Option value='5'>5 Seconds</Option>
             <Option value='10'>10 Seconds</Option>
             <Option value='15'>15 Seconds</Option>
@@ -10,9 +11,16 @@
             <Option value='60'>60 Seconds</Option>
         </List>
     </Field>
+    <Field id='stateLoopHelp' type='label' fontColor='darkgray' fontSize='small' alignWithControl='true'>
+        <Label>How often to check the on/off state of devices.</Label>
+    </Field>
+    <Field id='nothingLabel1' type='label'>
+        <Label> </Label>
+    </Field>
     <Field id='touchDiskFreq' type='menu' defaultValue='10'>
         <Label>Touch disk frequency:</Label>
         <List>
+            <Option value='1'>1 Minute</Option>
             <Option value='2'>2 Minutes</Option>
             <Option value='5'>5 Minutes</Option>
             <Option value='10'>10 Minutes</Option>
@@ -24,9 +32,13 @@
     <Field id='touchDiskHelp' type='label' fontColor='darkgray' fontSize='small' alignWithControl='true'>
         <Label>How often to touch a hidden file on disks configured to prevent sleep.</Label>
     </Field>
-    <Field id='refreshFSFreq' type='menu' defaultValue='15'>
+    <Field id='nothingLabel2' type='label'>
+        <Label> </Label>
+    </Field>
+    <Field id='refreshFSFreq' type='menu' defaultValue='30'>
         <Label>Get filesystem frequency:</Label>
         <List>
+            <Option value='1'>1 Minute</Option>
             <Option value='2'>2 Minutes</Option>
             <Option value='5'>5 Minutes</Option>
             <Option value='10'>10 Minutes</Option>
@@ -37,6 +49,9 @@
     </Field>
     <Field id='refreshFSHelp' type='label' fontColor='darkgray' fontSize='small' alignWithControl='true'>
         <Label>How often to check the logical attachment point of a disk. Typically only matters if a removable drive gets remounted after long absence.</Label>
+    </Field>
+    <Field id='nothingLabel3' type='label'>
+        <Label> </Label>
     </Field>
     <Field id='debugSeparator' type='separator' />
 	<Field id='showDebugInfo' type='checkbox'>

@@ -20,23 +20,26 @@ except ImportError:
 ###############################################################################
 # globals
 
-_localMountCmd     = "/usr/sbin/diskutil mount {device}".format
-_localUnmountCmd   = "/usr/sbin/diskutil umount {force} {device}".format
-_networkMountCmd   = "/bin/mkdir {mountpoint} 2>/dev/null; /sbin/mount -t {urlscheme} {volumeurl} {mountpoint}".format
-_networkUnmountCmd = "/sbin/umount {force} {filesystem}; /bin/rmdir {mountpoint} 2>/dev/null".format
+k_diskStatusImage   = ( indigo.kStateImageSel.SensorOff, indigo.kStateImageSel.SensorOn )
 
-_getStatsCmd       = "/bin/df -mn | grep {expression}".format
-_getStatsExp       = "^{filesystem} ".format
-_reVolumeData      = re.compile(r".+? ([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+)% .+")
+k_localMountCmd     = "/usr/sbin/diskutil mount {filesystem}".format
+k_localUnmountCmd   = "/usr/sbin/diskutil umount {force} {filesystem}".format
+k_networkMountCmd   = "/bin/mkdir {mountpoint} 2>/dev/null; /sbin/mount -t {urlscheme} {volumeurl} {mountpoint}".format
+k_networkUnmountCmd = "/sbin/umount {force} {filesystem}".format
 
-_getFilesystemCmd  = "/usr/sbin/diskutil list | grep {expression}".format
-_getFilesystemExp  = " {volumename}  ".format
+k_dfGetDataCmd      = "/bin/df -mn"
+k_dfInfoGroupsKeys  =           (       'size',   'used',   'free',  'percent'    )
+k_dfInfoGroupsRegex = re.compile(r".+? ([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+)% .+")
+k_dfSearchExp       = "^{filesystem} .*$".format
 
-_touchDiskCmd      = "touch /Volumes/{volumename}/.preventsleep".format
+k_getFilesystemCmd  = "/usr/sbin/diskutil list | grep {expression}".format
+k_getFilesystemExp  = " {volumename}  ".format
 
-_returnFalseCmd    = "false"
+k_touchDiskCmd      = "/usr/bin/touch {mountpoint}/.preventsleep".format
 
-_urlschemes        = {'smb':'smbfs', 'nfs':'nfs', 'afp':'afp', 'ftp':'ftp', 'webdav':'webdav'}
+k_returnFalseCmd    = "echo {message}; false".format
+
+k_urlSchemes        = {'smb':'smbfs', 'nfs':'nfs', 'afp':'afp', 'ftp':'ftp', 'webdav':'webdav'}
 
 ################################################################################
 class Plugin(indigo.PluginBase):
@@ -61,7 +64,9 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("Debug logging enabled")
         
         self.deviceDict = dict()
-        #indigo.devices.subscribeToChanges()
+        self._dfData = ""
+        self._dfTime = 0
+        self.df_refresh = True
 
     ########################################
     def shutdown(self):
@@ -91,7 +96,7 @@ class Plugin(indigo.PluginBase):
     
     ########################################
     def runConcurrentThread(self):
-        lastRefreshFS = lastTouchDisk = time.time()
+        lastRefreshFS = lastTouchDisk = 0
         self.sleep(self.stateLoopFreq)
         try:
             while True:
@@ -100,8 +105,9 @@ class Plugin(indigo.PluginBase):
                 doRefreshFS = loopStart >= lastRefreshFS  + self.refreshFSFreq
                 doTouchDisk = loopStart >= lastTouchDisk  + self.touchDiskFreq
                 
-                for devId in self.deviceDict:
-                    self.updateDeviceStates(devId, doRefreshFS, doTouchDisk)
+                self.df_refresh = True
+                for devId, dev in self.deviceDict.items():
+                    dev.update(doRefreshFS, doTouchDisk)
                 
                 lastRefreshFS = [lastRefreshFS, loopStart][doRefreshFS]
                 lastTouchDisk = [lastTouchDisk, loopStart][doTouchDisk]
@@ -111,30 +117,26 @@ class Plugin(indigo.PluginBase):
             pass    # Optionally catch the StopThread exception and do any needed cleanup.
     
     ########################################
+    @property
+    def dfResults(self):
+        if self.df_refresh:
+            success, data = do_shell_script(k_dfGetDataCmd)
+            if success:
+                self._dfData = data
+                self._dfTime = time.time()
+                self.df_refresh = False
+        return self._dfData, self._dfTime
+    
+    ########################################
     # Device Methods
     ########################################
     def deviceStartComm(self, dev):
         self.logger.debug("deviceStartComm: "+dev.name)
         if dev.version != self.pluginVersion:
             self.updateDeviceVersion(dev)
-        theProps = dev.pluginProps
-        
-        if dev.deviceTypeId == 'localDisk':
-            pass
-            
-        elif dev.deviceTypeId == 'networkDisk':
-            parsed = urlparse.urlsplit(theProps['volumeURL'])
-            theProps['urlScheme'] = _urlschemes[parsed.scheme]
-            theProps['mountPoint'] = "/Volumes/"+theProps['volumeName']
-        
-        if theProps != dev.pluginProps:
-            dev.replacePluginPropsOnServer(theProps)
-        self.deviceDict[dev.id] = { 'dev'      :dev, 
-                                    'mountCmd' :self.getMountCmd(dev), 
-                                    'statsCmd' :self.getStatsCmd(dev), 
-                                    'touchCmd' :self.getTouchCmd(dev),
-                                    'locFSCmd' :self.getLocFSCmd(dev) }
-        self.updateDeviceStates(dev.id, True)
+        if dev.configured:
+            self.deviceDict[dev.id] = self.DiskDevice(dev, self)
+            self.deviceDict[dev.id].update(True)
     
     ########################################
     def deviceStopComm(self, dev):
@@ -149,12 +151,20 @@ class Plugin(indigo.PluginBase):
         
         if not valuesDict.get('volumeName',''):
             errorsDict['volumeName'] = "Required"
+        else:
+            valuesDict['mountPoint'] = "/Volumes/"+valuesDict['volumeName']
         
         if deviceTypeId == 'networkDisk':
             if not valuesDict.get('volumeURL',''):
                 errorsDict['volumeURL'] = "Required"
             elif not is_valid_url(valuesDict['volumeURL']):
                 errorsDict['volumeURL'] = "Not valid URL"
+            else:
+                try:
+                    parsed = urlparse.urlsplit(valuesDict['volumeURL'])
+                    valuesDict['urlScheme'] = k_urlSchemes[parsed.scheme]
+                except:
+                    errorsDict['volumeURL'] = "Not supported filesystem type"
         
         if len(errorsDict) > 0:
             self.logger.debug('validate device config error: \n{0}'.format(str(errorsDict)))
@@ -173,103 +183,27 @@ class Plugin(indigo.PluginBase):
         theProps["version"] = self.pluginVersion
         dev.replacePluginPropsOnServer(theProps)
     
-    ########################################
-    def setDeviceOnOff(self, devId, onOffState):
-        dev = self.deviceDict[devId]['dev']
-        if dev.states['onOffState'] != onOffState:
-            cmd = self.deviceDict[devId]['mountCmd'][onOffState]
-            if do_shell_script(cmd)[0]:
-                self.logger.info('{0} volume "{1}"'.format(['unmounting','mounting'][onOffState], dev.pluginProps['volumeName']))
-                self.updateDeviceStates(devId)
-            else:
-                self.logger.error('can\'t {0} volume "{1}"'.format(['unmount','mount'][onOffState], dev.pluginProps['volumeName']))
-    
-    ########################################
-    def updateDeviceStates(self, devId, doRefreshFS=False, doTouchDisk=False):
-        dev = self.deviceDict[devId]['dev']
-        theStates = dev.states
-        filesystemChanged = False
-        
-        if  doRefreshFS or (not theStates['filesystem']):
-            self.logger.debug('getting filesystem for volume "{0}"'.format(dev.pluginProps['volumeName']))
-            if dev.deviceTypeId == 'localDisk':
-                success, data = do_shell_script(self.deviceDict[devId]['locFSCmd'])
-                if success:
-                    for line in data.splitlines():
-                        theStates['diskType']   = line[6:32].strip()
-                        theStates['filesystem'] = '/dev/' + line[68:].strip()
-                        if theStates['diskType'] != 'Apple_CoreStorage':
-                            break
-            elif dev.deviceTypeId == 'networkDisk':
-                parsed     = urlparse.urlsplit(dev.pluginProps['volumeURL'])
-                theStates['diskType']   = parsed.scheme
-                theStates['filesystem'] = '//'
-                if parsed.username: theStates['filesystem'] += pathname2url(parsed.username) + '@'
-                if parsed.hostname: theStates['filesystem'] += parsed.hostname
-                if parsed.port:     theStates['filesystem'] += ':' + parsed.port
-                if parsed.path:     theStates['filesystem'] += pathname2url(parsed.path)
-            if theStates['filesystem'] != dev.states['filesystem']:
-                filesystemChanged = True
-                
-        if not filesystemChanged:
-            mounted, result = do_shell_script(self.deviceDict[devId]['statsCmd'])
-            if mounted:
-                diskStats = regextract(result, _reVolumeData, ['size','used','free','percent'])
-                theStates['megsTotal'] = int(diskStats['size'])
-                theStates['megsUsed']  = int(diskStats['used'])
-                theStates['megsFree']  = int(diskStats['free'])
-                theStates['percUsed']  = int(diskStats['percent'])
-                theStates['percFree']  = 100-int(diskStats['percent'])
-                theStates['sizeTotal'] = mb_to_string(int(diskStats['size']))
-                theStates['sizeUsed']  = mb_to_string(int(diskStats['used']))
-                theStates['sizeFree']  = mb_to_string(int(diskStats['free']))
-            
-                if doTouchDisk and dev.pluginProps['preventSleep']:
-                    self.logger.debug('touching file on volume "{0}"'.format(dev.pluginProps['volumeName']))
-                    if do_shell_script(self.deviceDict[devId]['touchCmd']):
-                        theStates['lastTouch'] = time.strftime('%Y-%m-%d %T')
-            
-            if mounted != theStates['onOffState']:
-                theStates['onOffState'] = mounted
-                self.logger.info('"{0}" {1}'.format(dev.name, ['off','on'][mounted]))
-        
-        newStates = []
-        for key, value in theStates.iteritems():
-            if theStates[key] != dev.states[key]:
-                newStates.append({'key':key,'value':value})
-        if len(newStates) > 0:
-            self.logger.debug('updating states on device "{0}":'.format(dev.name))
-            for item in newStates:
-                self.logger.debug('{0}: {1}'.format(item['key'].rjust(12),item['value']))
-            dev.updateStatesOnServer(newStates)
-            
-            if filesystemChanged:
-                self.deviceDict[devId]['mountCmd'] = self.getMountCmd(dev)
-                self.deviceDict[devId]['statsCmd'] = self.getStatsCmd(dev)
-                if theStates['filesystem']:
-                    # run again with new info
-                    self.updateDeviceStates(devId, False, False)
-                
     
     ########################################
     # Action Methods
     ########################################
     def actionControlDimmerRelay(self, action, dev):
         self.logger.debug("actionControlDimmerRelay: "+dev.name)
+        disk = self.deviceDict[dev.id]
         # TURN ON
         if action.deviceAction == indigo.kDimmerRelayAction.TurnOn:
-            self.setDeviceOnOff(dev.id, True)
+            disk.onState = True
         # TURN OFF
         elif action.deviceAction == indigo.kDimmerRelayAction.TurnOff:
-            self.setDeviceOnOff(dev.id, False)
+            disk.onState = False
         # TOGGLE
         elif action.deviceAction == indigo.kDimmerRelayAction.Toggle:
-            self.setDeviceOnOff(dev.id, not dev.onState)
+            disk.onState = not app.onState
         # STATUS REQUEST
         elif action.deviceAction == indigo.kUniversalAction.RequestStatus:
             self.logger.info('"{0}" status update'.format(dev.name))
-            if dev.onState:
-                self.updateDeviceStates(dev.id, True)
+            self.df_refresh = True
+            disk.update(True)
         # UNKNOWN
         else:
             self.logger.debug('"{0}" {1} request ignored'.format(dev.name, str(action.deviceAction)))
@@ -284,55 +218,185 @@ class Plugin(indigo.PluginBase):
         else:
             self.debug = True
             self.logger.debug("Debug logging enabled")
+    
+    
+    
+    ########################################
+    # Classes
+    ########################################
+    ########################################
+    class DiskDevice(object):
+        ########################################
+        def __init__(self, instance, plugin):
+            self.dev        = instance
+            self.name       = self.dev.name
+            self.type       = self.dev.deviceTypeId
+            self.props      = self.dev.pluginProps
+            self.states     = self.dev.states
+            
+            self.plugin     = plugin
+            self.logger     = plugin.logger
+            
+            self.touchCmd   = k_touchDiskCmd( mountpoint = cmd_quote(self.props['mountPoint']) )
+            
+            self._dfInfo    = ""
+            self._dfTime    = 0
+            self._dfRegex = re.compile( "^$" )
+            self.dfRegex_refresh  = True
         
-    ########################################
-    # Callbacks
-    ########################################
+
+        ########################################
+        def update(self, doRefreshFS=False, doTouchDisk=False):
+            self.states['onOffState'] = self.onOffFilesystem(doRefreshFS)
+            
+            if self.onState:
+                diskStats = regextract(self.dfInfo, k_dfInfoGroupsRegex, k_dfInfoGroupsKeys)
+                self.states['megs_total']   = int(diskStats['size'])
+                self.states['megs_used']    = int(diskStats['used'])
+                self.states['megs_free']    = int(diskStats['free'])
+                self.states['percent_used'] = int(diskStats['percent'])
+                self.states['percent_free'] = 100-int(diskStats['percent'])
+                self.states['size_total']   = mb_to_string(int(diskStats['size']))
+                self.states['size_used']    = mb_to_string(int(diskStats['used']))
+                self.states['size_free']    = mb_to_string(int(diskStats['free']))
+                
+                if doTouchDisk:
+                    self.touch()
+            
+            newStates = []
+            for key, value in self.states.iteritems():
+                if self.states[key] != self.dev.states[key]:
+                    if key in ['percent_free','percent_used']:
+                        newStates.append({'key':key,'value':value, 'uiValue': '{0}%'.format(value)})
+                    elif key in ['megs_free','megs_used','megs_total']:
+                        newStates.append({'key':key,'value':value, 'uiValue': '{0} MB'.format(value)})
+                    else:
+                        newStates.append({'key':key,'value':value})
+                    
+                    if key == 'onOffState':
+                        self.logger.info('"{0}" {1}'.format(self.name, ['off','on'][value]))
+                        self.dev.updateStateImageOnServer(k_diskStatusImage[value])
+                
+            if len(newStates) > 0:
+                if self.plugin.debug: # don't fill up plugin log unless actively debugging
+                    self.logger.debug('updating states on device "{0}":'.format(self.name))
+                    for item in newStates:
+                        self.logger.debug('{:>16}: {}'.format(item['key'],item['value']))
+                self.dev.updateStatesOnServer(newStates)
+                self.states = self.dev.states
         
-    ########################################
-    # Utilities
-    ########################################
-    def getMountCmd(self, dev):
-        if dev.deviceTypeId == 'localDisk':
-            if dev.states['filesystem']:
-                mCmd = _localMountCmd(      device = cmd_quote(dev.states['filesystem']))
-                uCmd = _localUnmountCmd(    device = cmd_quote(dev.states['filesystem']),
-                                            force  = ['','force'][dev.pluginProps['forceUnmount']] )
-            else:
-                mCmd = _returnFalseCmd
-                uCmd = _returnFalseCmd
-        elif dev.deviceTypeId == 'networkDisk':
-            mCmd = _networkMountCmd(        mountpoint = cmd_quote(dev.pluginProps['mountPoint']),
-                                            volumeurl  = cmd_quote(dev.pluginProps['volumeURL']),
-                                            urlscheme  = dev.pluginProps['urlScheme'] )
-            if dev.states['filesystem']:
-                uCmd = _networkUnmountCmd(  filesystem = cmd_quote(dev.states['filesystem']),
-                                            mountpoint = cmd_quote(dev.pluginProps['mountPoint']),
-                                            force      = ['','-f'][dev.pluginProps['forceUnmount']] )
-            else:
-                uCmd = _returnFalseCmd
-        return uCmd, mCmd
+        def touch(self):
+            if self.props['preventSleep'] and self.onState:
+                self.logger.debug('touching file on volume "{0}"'.format(self.props['volumeName']))
+                success, response = do_shell_script(self.touchCmd)
+                if success:
+                    self.states['last_touch'] = time.strftime('%Y-%m-%d %T')
+                else:
+                    self.logger.error('touch disk "{0}" failed'.format(self.props['volumeName']))
+                    self.logger.debug(response)
         
-    ########################################
-    def getStatsCmd(self, dev):
-        if dev.states['filesystem']:
-            exp = _getStatsExp( filesystem = dev.states['filesystem'] )
-            cmd = _getStatsCmd( expression = cmd_quote(exp) )
-        else:
-            cmd = _returnFalseCmd
-        return cmd
+        ########################################
+        def onOffFilesystem(self, force=False):
+            if self.type == 'localDisk':
+                if not self.states['filesystem'] or force:
+                    self.logger.debug('getting filesystem for volume "{0}"'.format(self.props['volumeName']))
+                    if self.type == 'localDisk':
+                        self.states['filesystem'] = ''
+                        exp = k_getFilesystemExp( volumename=self.props['volumeName'] )
+                        cmd = k_getFilesystemCmd( expression=cmd_quote(exp) )
+                        success, data = do_shell_script(cmd)
+                        if success:
+                            for line in data.splitlines()[::-1]:
+                                disk_type  = line[6:32].strip()
+                                filesystem = '/dev/' + line[68:].strip()
+                                if disk_type != 'Apple_CoreStorage':
+                                    self.states['disk_type']  = disk_type
+                                    self.states['filesystem'] = filesystem
+                                    self.dfRegex_refresh = True
+                                    break
+            elif self.type == 'networkDisk':
+                if not self.states['filesystem']:
+                    parsed     = urlparse.urlsplit(self.props['volumeURL'])
+                    self.states['disk_type']  = parsed.scheme
+                    self.states['filesystem'] = '//'
+                    if parsed.username: self.states['filesystem'] += pathname2url(parsed.username) + '@'
+                    if parsed.hostname: self.states['filesystem'] += parsed.hostname
+                    if parsed.port:     self.states['filesystem'] += ':' + parsed.port
+                    if parsed.path:     self.states['filesystem'] += pathname2url(parsed.path)
+                    self.dfRegex_refresh = True
+            return bool(self.dfInfo)
         
-    ########################################
-    def getTouchCmd(self, dev):
-        cmd = _touchDiskCmd( volumename=dev.pluginProps['volumeName'] )
-        return cmd
         
-    ########################################
-    def getLocFSCmd(self, dev):
-        exp = _getFilesystemExp( volumename=dev.pluginProps['volumeName'] )
-        cmd = _getFilesystemCmd( expression=cmd_quote(exp) )
-        return cmd
+        ########################################
+        # Class Properties
+        ########################################
+        def onStateGet(self):
+            return self.states['onOffState']
         
+        def onStateSet(self,newState):
+            if newState != self.onState:
+                success, response = do_shell_script(self.onOffCmds[newState])
+                if success:
+                    self.logger.info('{0} volume "{1}"'.format(['unmounting','mounting'][newState], self.props['volumeName']))
+                    self.plugin.psRefresh = True
+                    self.dfRegex_refresh = True
+                    self.plugin.sleep(0.25)
+                    self.update(True)
+                else:
+                    self.logger.error('failed to {0} volume "{1}"'.format(['unmount','mount'][newState], self.props['volumeName']))
+                    self.logger.debug(response)
+        
+        onState = property(onStateGet, onStateSet)
+        
+        ########################################
+        @property
+        def onOffCmds(self):
+            onCmd = offCmd = k_returnFalseCmd( message = "not available" )
+            if self.type == 'localDisk':
+                if self.states['filesystem']:
+                    onCmd  = k_localMountCmd(   filesystem  = cmd_quote(self.states['filesystem']))
+                    offCmd = k_localUnmountCmd( filesystem  = cmd_quote(self.states['filesystem']),
+                                                force       = ['','force'][self.props['forceUnmount']] )
+            elif self.type == 'networkDisk':
+                onCmd = k_networkMountCmd(      mountpoint  = cmd_quote(self.props['mountPoint']),
+                                                volumeurl   = cmd_quote(self.props['volumeURL']),
+                                                urlscheme   = self.props['urlScheme'] )
+                if self.states['filesystem']:
+                    offCmd = k_networkUnmountCmd(   filesystem  = cmd_quote(self.states['filesystem']),
+                                                    mountpoint  = cmd_quote(self.props['mountPoint']),
+                                                    force       = ['','-f'][self.props['forceUnmount']] )
+            
+            return (offCmd,onCmd)
+        
+        ########################################
+        @property
+        def dfInfo(self):
+            dfData, dfTime = self.plugin.dfResults
+            if dfTime > self._dfTime:
+                match = self.dfRegex.search(dfData)
+                if match:
+                    self._dfInfo = match.group(0)
+                else:
+                    self._dfInfo = False
+                self._dfTime = dfTime
+            return self._dfInfo
+    
+        @property
+        def dfRegex(self):
+            if self.dfRegex_refresh:
+                if self.states['filesystem']:
+                    exp = k_dfSearchExp( filesystem = self.states['filesystem'] )
+                    self._dfRegex = re.compile( exp, re.MULTILINE )
+                    self.dfRegex_refresh = False
+                else:
+                    self._dfRegex = re.compile( "^$" )
+            return self._dfRegex
+        
+    
+    
+    
+########################################
+# Utilities
 ########################################
 def do_shell_script (cmd):
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -357,7 +421,7 @@ def is_valid_url(url, qualifying=None):
 
 ########################################
 # http://stackoverflow.com/questions/12523586/python-format-size-application-converting-b-to-kb-mb-gb-tb#12523683
-def mb_to_string(unitCount, precision=1):
+def mb_to_string(unitCount, precision=2):
     if unitCount < 0:
         raise ValueError("!!! unitCount can't be less than 0 !!!")
     step_to_greater_unit = 1024.
