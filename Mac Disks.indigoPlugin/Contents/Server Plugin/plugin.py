@@ -22,18 +22,21 @@ except ImportError:
 
 k_diskStatusImage   = ( indigo.kStateImageSel.SensorOff, indigo.kStateImageSel.SensorOn )
 
-k_localMountCmd     = "/usr/sbin/diskutil mount {filesystem}".format
-k_localUnmountCmd   = "/usr/sbin/diskutil umount {force} {filesystem}".format
+k_localMountCmd     = "/usr/sbin/diskutil mount {identifier}".format
+k_localUnmountCmd   = "/usr/sbin/diskutil umount {force} {identifier}".format
 k_networkMountCmd   = "/bin/mkdir {mountpoint} 2>/dev/null; /sbin/mount -t {urlscheme} {volumeurl} {mountpoint}".format
-k_networkUnmountCmd = "/sbin/umount {force} {filesystem}".format
+k_networkUnmountCmd = "/sbin/umount {force} {identifier}".format
 
 k_dfGetDataCmd      = "/bin/df -mn"
 k_dfInfoGroupsKeys  =           (       'size',   'used',   'free',  'percent'    )
 k_dfInfoGroupsRegex = re.compile(r".+? ([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+)% .+")
-k_dfSearchExp       = "^{filesystem} .*$".format
+k_dfSearchExp       = "^{identifier} .*$".format
+k_dfSearchNull      = "^$"
 
-k_getFilesystemCmd  = "/usr/sbin/diskutil list | grep {expression}".format
-k_getFilesystemExp  = " {volumename}  ".format
+k_duGetDataCmd      = "/usr/sbin/diskutil list"
+k_duSearchExp       = "^.* {volumename}  .*$".format
+k_duInfoGroupsKeys  =           (       '#',       'type',      'name',       'size',          'identifier'  )
+k_duInfoGroupsRegex = re.compile(r" *([0-9]+): +([a-zA-Z0-9_]*) (.*?) *[+* ]([0-9.,]+ [A-Z]+) *([a-z0-9]+) *")
 
 k_touchDiskCmd      = "/usr/bin/touch {mountpoint}/.preventsleep".format
 
@@ -56,7 +59,7 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         
         self.stateLoopFreq  = int(self.pluginPrefs.get('stateLoopFreq','10'))
-        self.refreshFSFreq  = int(self.pluginPrefs.get('refreshFSFreq','10'))*60
+        self.identifyFreq  = int(self.pluginPrefs.get('identifyFreq','10'))*60
         self.touchDiskFreq  = int(self.pluginPrefs.get('touchDiskFreq','10'))*60
         self.debug          = self.pluginPrefs.get('showDebugInfo',False)
         self.logger.debug("startup")
@@ -65,8 +68,9 @@ class Plugin(indigo.PluginBase):
         
         self.deviceDict = dict()
         self._dfData = ""
-        self._dfTime = 0
-        self.df_refresh = True
+        self._dfRefresh = True
+        self._duData = ""
+        self._duRefresh = True
 
     ########################################
     def shutdown(self):
@@ -78,7 +82,7 @@ class Plugin(indigo.PluginBase):
         self.logger.debug("closedPrefsConfigUi")
         if not userCancelled:
             self.stateLoopFreq  = int(valuesDict['stateLoopFreq'])
-            self.refreshFSFreq  = int(valuesDict['refreshFSFreq'])*60
+            self.identifyFreq   = int(valuesDict['identifyFreq'])*60
             self.touchDiskFreq  = int(valuesDict['touchDiskFreq'])*60
             self.debug          =     valuesDict['showDebugInfo']
             if self.debug:
@@ -96,36 +100,25 @@ class Plugin(indigo.PluginBase):
     
     ########################################
     def runConcurrentThread(self):
-        lastRefreshFS = lastTouchDisk = 0
+        lastIdentify = lastTouchDisk = 0
         self.sleep(self.stateLoopFreq)
         try:
             while True:
                 loopStart = time.time()
                 
-                doRefreshFS = loopStart >= lastRefreshFS  + self.refreshFSFreq
-                doTouchDisk = loopStart >= lastTouchDisk  + self.touchDiskFreq
+                doIdentify  = loopStart >= lastIdentify  + self.identifyFreq
+                doTouchDisk = loopStart >= lastTouchDisk + self.touchDiskFreq
                 
-                self.df_refresh = True
+                self.refresh_data()
                 for devId, dev in self.deviceDict.items():
-                    dev.update(doRefreshFS, doTouchDisk)
+                    dev.update(doIdentify, doTouchDisk)
                 
-                lastRefreshFS = [lastRefreshFS, loopStart][doRefreshFS]
+                lastIdentify  = [lastIdentify,  loopStart][doIdentify]
                 lastTouchDisk = [lastTouchDisk, loopStart][doTouchDisk]
                 
                 self.sleep( loopStart + self.stateLoopFreq - time.time() )
         except self.StopThread:
             pass    # Optionally catch the StopThread exception and do any needed cleanup.
-    
-    ########################################
-    @property
-    def dfResults(self):
-        if self.df_refresh:
-            success, data = do_shell_script(k_dfGetDataCmd)
-            if success:
-                self._dfData = data
-                self._dfTime = time.time()
-                self.df_refresh = False
-        return self._dfData, self._dfTime
     
     ########################################
     # Device Methods
@@ -202,7 +195,7 @@ class Plugin(indigo.PluginBase):
         # STATUS REQUEST
         elif action.deviceAction == indigo.kUniversalAction.RequestStatus:
             self.logger.info('"{0}" status update'.format(dev.name))
-            self.df_refresh = True
+            self.refresh_data()
             disk.update(True)
         # UNKNOWN
         else:
@@ -218,6 +211,33 @@ class Plugin(indigo.PluginBase):
         else:
             self.debug = True
             self.logger.debug("Debug logging enabled")
+    
+    
+    ########################################
+    # Properties
+    ########################################
+    @property
+    def dfResults(self):
+        if self._dfRefresh:
+            success, data = do_shell_script(k_dfGetDataCmd)
+            if success:
+                self._dfData = data
+                self._dfRefresh = False
+        return self._dfData
+    
+    ########################################
+    @property
+    def duResults(self):
+        if self._duRefresh:
+            success, data = do_shell_script(k_duGetDataCmd)
+            if success:
+                self._duData = data
+                self._duRefresh = False
+        return self._duData
+        
+    ########################################
+    def refresh_data(self):
+        self._dfRefresh = self._duRefresh = True        
     
     
     
@@ -239,16 +259,44 @@ class Plugin(indigo.PluginBase):
             
             self.touchCmd   = k_touchDiskCmd( mountpoint = cmd_quote(self.props['mountPoint']) )
             
-            self._dfInfo    = ""
-            self._dfTime    = 0
-            self._dfRegex = re.compile( "^$" )
-            self.dfRegex_refresh  = True
-        
 
         ########################################
-        def update(self, doRefreshFS=False, doTouchDisk=False):
-            self.states['onOffState'] = self.onOffFilesystem(doRefreshFS)
-            
+        def update(self, doIdentify=False, doTouchDisk=False):
+            if not self.states['identifier'] or doIdentify:
+                self.getIdentifier()
+            self.updateOnOff()
+            self.updateStats()
+            if doTouchDisk:
+                self.touchDisk()
+            self.saveStates()
+        
+        ########################################
+        def getIdentifier(self):
+            if self.type == 'localDisk':
+                self.logger.debug('getting identifier for volume "{0}"'.format(self.props['volumeName']))
+                self.states['identifier'] = ""
+                for line in self.duInfo[::-1]:
+                    diskStats = regextract(line, k_duInfoGroupsRegex, k_duInfoGroupsKeys)
+                    if diskStats['type'] != 'Apple_CoreStorage':
+                        self.states['disk_type']    = diskStats['type']
+                        self.states['identifier']   = "/dev/" + diskStats['identifier']
+                        break
+            elif self.type == 'networkDisk':
+                parsed     = urlparse.urlsplit(self.props['volumeURL'])
+                identifier = '//'
+                if parsed.username: identifier += pathname2url(parsed.username) + '@'
+                if parsed.hostname: identifier += parsed.hostname
+                if parsed.port:     identifier += ':' + parsed.port
+                if parsed.path:     identifier += pathname2url(parsed.path)
+                self.states['identifier'] = identifier
+                self.states['disk_type']  = parsed.scheme
+        
+        ########################################
+        def updateOnOff(self):
+            self.states['onOffState'] = bool(self.dfInfo)
+        
+        ########################################
+        def updateStats(self):
             if self.onState:
                 diskStats = regextract(self.dfInfo, k_dfInfoGroupsRegex, k_dfInfoGroupsKeys)
                 self.states['megs_total']   = int(diskStats['size'])
@@ -260,9 +308,19 @@ class Plugin(indigo.PluginBase):
                 self.states['size_used']    = mb_to_string(int(diskStats['used']))
                 self.states['size_free']    = mb_to_string(int(diskStats['free']))
                 
-                if doTouchDisk:
-                    self.touch()
-            
+        ########################################
+        def touchDisk(self):
+            if self.props['preventSleep'] and self.onState:
+                self.logger.debug('touching file on volume "{0}"'.format(self.props['volumeName']))
+                success, response = do_shell_script(self.touchCmd)
+                if success:
+                    self.states['last_touch'] = time.strftime('%Y-%m-%d %T')
+                else:
+                    self.logger.error('touch disk "{0}" failed'.format(self.props['volumeName']))
+                    self.logger.debug(response)
+        
+        ########################################
+        def saveStates(self):    
             newStates = []
             for key, value in self.states.iteritems():
                 if self.states[key] != self.dev.states[key]:
@@ -285,47 +343,6 @@ class Plugin(indigo.PluginBase):
                 self.dev.updateStatesOnServer(newStates)
                 self.states = self.dev.states
         
-        def touch(self):
-            if self.props['preventSleep'] and self.onState:
-                self.logger.debug('touching file on volume "{0}"'.format(self.props['volumeName']))
-                success, response = do_shell_script(self.touchCmd)
-                if success:
-                    self.states['last_touch'] = time.strftime('%Y-%m-%d %T')
-                else:
-                    self.logger.error('touch disk "{0}" failed'.format(self.props['volumeName']))
-                    self.logger.debug(response)
-        
-        ########################################
-        def onOffFilesystem(self, force=False):
-            if self.type == 'localDisk':
-                if not self.states['filesystem'] or force:
-                    self.logger.debug('getting filesystem for volume "{0}"'.format(self.props['volumeName']))
-                    if self.type == 'localDisk':
-                        self.states['filesystem'] = ''
-                        exp = k_getFilesystemExp( volumename=self.props['volumeName'] )
-                        cmd = k_getFilesystemCmd( expression=cmd_quote(exp) )
-                        success, data = do_shell_script(cmd)
-                        if success:
-                            for line in data.splitlines()[::-1]:
-                                disk_type  = line[6:32].strip()
-                                filesystem = '/dev/' + line[68:].strip()
-                                if disk_type != 'Apple_CoreStorage':
-                                    self.states['disk_type']  = disk_type
-                                    self.states['filesystem'] = filesystem
-                                    self.dfRegex_refresh = True
-                                    break
-            elif self.type == 'networkDisk':
-                if not self.states['filesystem']:
-                    parsed     = urlparse.urlsplit(self.props['volumeURL'])
-                    self.states['disk_type']  = parsed.scheme
-                    self.states['filesystem'] = '//'
-                    if parsed.username: self.states['filesystem'] += pathname2url(parsed.username) + '@'
-                    if parsed.hostname: self.states['filesystem'] += parsed.hostname
-                    if parsed.port:     self.states['filesystem'] += ':' + parsed.port
-                    if parsed.path:     self.states['filesystem'] += pathname2url(parsed.path)
-                    self.dfRegex_refresh = True
-            return bool(self.dfInfo)
-        
         
         ########################################
         # Class Properties
@@ -338,10 +355,9 @@ class Plugin(indigo.PluginBase):
                 success, response = do_shell_script(self.onOffCmds[newState])
                 if success:
                     self.logger.info('{0} volume "{1}"'.format(['unmounting','mounting'][newState], self.props['volumeName']))
-                    self.plugin.psRefresh = True
-                    self.dfRegex_refresh = True
+                    self.plugin.refresh_data()
                     self.plugin.sleep(0.25)
-                    self.update(True)
+                    self.update()
                 else:
                     self.logger.error('failed to {0} volume "{1}"'.format(['unmount','mount'][newState], self.props['volumeName']))
                     self.logger.debug(response)
@@ -353,16 +369,16 @@ class Plugin(indigo.PluginBase):
         def onOffCmds(self):
             onCmd = offCmd = k_returnFalseCmd( message = "not available" )
             if self.type == 'localDisk':
-                if self.states['filesystem']:
-                    onCmd  = k_localMountCmd(   filesystem  = cmd_quote(self.states['filesystem']))
-                    offCmd = k_localUnmountCmd( filesystem  = cmd_quote(self.states['filesystem']),
+                if self.states['identifier']:
+                    onCmd  = k_localMountCmd(   identifier  = cmd_quote(self.states['identifier']))
+                    offCmd = k_localUnmountCmd( identifier  = cmd_quote(self.states['identifier']),
                                                 force       = ['','force'][self.props['forceUnmount']] )
             elif self.type == 'networkDisk':
                 onCmd = k_networkMountCmd(      mountpoint  = cmd_quote(self.props['mountPoint']),
                                                 volumeurl   = cmd_quote(self.props['volumeURL']),
                                                 urlscheme   = self.props['urlScheme'] )
-                if self.states['filesystem']:
-                    offCmd = k_networkUnmountCmd(   filesystem  = cmd_quote(self.states['filesystem']),
+                if self.states['identifier']:
+                    offCmd = k_networkUnmountCmd(   identifier  = cmd_quote(self.states['identifier']),
                                                     mountpoint  = cmd_quote(self.props['mountPoint']),
                                                     force       = ['','-f'][self.props['forceUnmount']] )
             
@@ -371,27 +387,24 @@ class Plugin(indigo.PluginBase):
         ########################################
         @property
         def dfInfo(self):
-            dfData, dfTime = self.plugin.dfResults
-            if dfTime > self._dfTime:
-                match = self.dfRegex.search(dfData)
-                if match:
-                    self._dfInfo = match.group(0)
-                else:
-                    self._dfInfo = False
-                self._dfTime = dfTime
-            return self._dfInfo
+            match = re.search(self.dfPattern, self.plugin.dfResults, re.MULTILINE)
+            if match:
+                return match.group(0)
+            else:
+                return None
     
         @property
-        def dfRegex(self):
-            if self.dfRegex_refresh:
-                if self.states['filesystem']:
-                    exp = k_dfSearchExp( filesystem = self.states['filesystem'] )
-                    self._dfRegex = re.compile( exp, re.MULTILINE )
-                    self.dfRegex_refresh = False
-                else:
-                    self._dfRegex = re.compile( "^$" )
-            return self._dfRegex
+        def dfPattern(self):
+            if self.states['identifier']:
+                return k_dfSearchExp( identifier = self.states['identifier'] )
+            else:
+                return k_dfSearchNull
         
+        @property
+        def duInfo(self):
+            pattern = k_duSearchExp(volumename = self.props['volumeName'])
+            return re.findall(pattern, self.plugin.duResults, re.MULTILINE)
+    
     
     
     

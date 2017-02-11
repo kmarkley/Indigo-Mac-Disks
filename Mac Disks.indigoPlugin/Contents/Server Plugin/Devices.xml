@@ -58,10 +58,10 @@
                 <TriggerLabel>Percent Free</TriggerLabel>
                 <ControlPageLabel>Percent Free</ControlPageLabel>
             </State>
-            <State id='filesystem'>
+            <State id='identifier'>
                 <ValueType>String</ValueType>
-                <TriggerLabel>Filesystem</TriggerLabel>
-                <ControlPageLabel>Filesystem</ControlPageLabel>
+                <TriggerLabel>Identifier</TriggerLabel>
+                <ControlPageLabel>Identifier</ControlPageLabel>
             </State>
             <State id='disk_type'>
                 <ValueType>String</ValueType>
@@ -136,10 +136,10 @@
                 <TriggerLabel>Percent Free</TriggerLabel>
                 <ControlPageLabel>Percent Free</ControlPageLabel>
             </State>
-            <State id='filesystem'>
+            <State id='identifier'>
                 <ValueType>String</ValueType>
-                <TriggerLabel>Filesystem</TriggerLabel>
-                <ControlPageLabel>Filesystem</ControlPageLabel>
+                <TriggerLabel>Identifier</TriggerLabel>
+                <ControlPageLabel>Identifier</ControlPageLabel>
             </State>
             <State id='disk_type'>
                 <ValueType>String</ValueType>

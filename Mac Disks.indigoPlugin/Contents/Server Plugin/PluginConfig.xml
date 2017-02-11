@@ -12,10 +12,8 @@
         </List>
     </Field>
     <Field id='stateLoopHelp' type='label' fontColor='darkgray' fontSize='small' alignWithControl='true'>
-        <Label>How often to check the on/off state of devices.</Label>
-    </Field>
-    <Field id='nothingLabel1' type='label'>
-        <Label> </Label>
+        <Label>How often to check the status of devices.
+        </Label>
     </Field>
     <Field id='touchDiskFreq' type='menu' defaultValue='10'>
         <Label>Touch disk frequency:</Label>
@@ -30,13 +28,11 @@
         </List>
     </Field>
     <Field id='touchDiskHelp' type='label' fontColor='darkgray' fontSize='small' alignWithControl='true'>
-        <Label>How often to touch a hidden file on disks configured to prevent sleep.</Label>
+        <Label>How often to touch a hidden file on disks configured to prevent sleep.
+        </Label>
     </Field>
-    <Field id='nothingLabel2' type='label'>
-        <Label> </Label>
-    </Field>
-    <Field id='refreshFSFreq' type='menu' defaultValue='30'>
-        <Label>Get filesystem frequency:</Label>
+    <Field id='identifyFreq' type='menu' defaultValue='30'>
+        <Label>Reset indentifier frequency:</Label>
         <List>
             <Option value='1'>1 Minute</Option>
             <Option value='2'>2 Minutes</Option>
@@ -47,11 +43,9 @@
             <Option value='60'>60 Minutes</Option>
         </List>
     </Field>
-    <Field id='refreshFSHelp' type='label' fontColor='darkgray' fontSize='small' alignWithControl='true'>
-        <Label>How often to check the logical attachment point of a disk. Typically only matters if a removable drive gets remounted after long absence.</Label>
-    </Field>
-    <Field id='nothingLabel3' type='label'>
-        <Label> </Label>
+    <Field id='identifyHelp' type='label' fontColor='darkgray' fontSize='small' alignWithControl='true'>
+        <Label>How often to confirm/reset the logical attachment point of a disk. Only matters for removable drives remounted after long absence.
+        </Label>
     </Field>
     <Field id='debugSeparator' type='separator' />
 	<Field id='showDebugInfo' type='checkbox'>
