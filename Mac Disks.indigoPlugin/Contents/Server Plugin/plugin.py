@@ -191,7 +191,7 @@ class Plugin(indigo.PluginBase):
             disk.onState = False
         # TOGGLE
         elif action.deviceAction == indigo.kDimmerRelayAction.Toggle:
-            disk.onState = not app.onState
+            disk.onState = not disk.onState
         # STATUS REQUEST
         elif action.deviceAction == indigo.kUniversalAction.RequestStatus:
             self.logger.info('"{0}" status update'.format(dev.name))

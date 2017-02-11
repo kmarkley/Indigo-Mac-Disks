@@ -3,6 +3,7 @@
     <Field id='stateLoopFreq' type='menu' defaultValue='10'>
         <Label>Update frequency:</Label>
         <List>
+            <Option value='1'>1 Second</Option>
             <Option value='2'>2 Seconds</Option>
             <Option value='5'>5 Seconds</Option>
             <Option value='10'>10 Seconds</Option>
