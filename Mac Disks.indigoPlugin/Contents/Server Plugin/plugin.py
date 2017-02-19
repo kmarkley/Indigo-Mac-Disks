@@ -59,7 +59,7 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         
         self.stateLoopFreq  = int(self.pluginPrefs.get('stateLoopFreq','10'))
-        self.identifyFreq  = int(self.pluginPrefs.get('identifyFreq','10'))*60
+        self.identifyFreq   = int(self.pluginPrefs.get('identifyFreq','10'))*60
         self.touchDiskFreq  = int(self.pluginPrefs.get('touchDiskFreq','10'))*60
         self.debug          = self.pluginPrefs.get('showDebugInfo',False)
         self.logger.debug("startup")
@@ -185,18 +185,18 @@ class Plugin(indigo.PluginBase):
         disk = self.deviceDict[dev.id]
         # TURN ON
         if action.deviceAction == indigo.kDimmerRelayAction.TurnOn:
-            disk.onState = True
+            diskDev.onState = True
         # TURN OFF
         elif action.deviceAction == indigo.kDimmerRelayAction.TurnOff:
-            disk.onState = False
+            diskDev.onState = False
         # TOGGLE
         elif action.deviceAction == indigo.kDimmerRelayAction.Toggle:
-            disk.onState = not disk.onState
+            diskDev.onState = not diskDev.onState
         # STATUS REQUEST
         elif action.deviceAction == indigo.kUniversalAction.RequestStatus:
             self.logger.info('"{0}" status update'.format(dev.name))
             self.refresh_data()
-            disk.update(True)
+            diskDev.update(True)
         # UNKNOWN
         else:
             self.logger.debug('"{0}" {1} request ignored'.format(dev.name, str(action.deviceAction)))
