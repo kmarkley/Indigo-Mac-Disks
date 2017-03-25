@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
-####################
+###############################################################################
 # http://www.indigodomo.com
 
 import indigo
@@ -46,16 +46,17 @@ k_urlSchemes        = {'smb':'smbfs', 'nfs':'nfs', 'afp':'afp', 'ftp':'ftp', 'we
 
 ################################################################################
 class Plugin(indigo.PluginBase):
-    ########################################
+    
+    #-------------------------------------------------------------------------------
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
     
     def __del__(self):
         indigo.PluginBase.__del__(self)
 
-    ########################################
+    #-------------------------------------------------------------------------------
     # Start, Stop and Config changes
-    ########################################
+    #-------------------------------------------------------------------------------
     def startup(self):
         
         self.stateLoopFreq  = int(self.pluginPrefs.get('stateLoopFreq','10'))
@@ -72,12 +73,12 @@ class Plugin(indigo.PluginBase):
         self._duData = ""
         self._duRefresh = True
 
-    ########################################
+    #-------------------------------------------------------------------------------
     def shutdown(self):
         self.logger.debug("shutdown")
         self.pluginPrefs["showDebugInfo"] = self.debug
 
-    ########################################
+    #-------------------------------------------------------------------------------
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
         self.logger.debug("closedPrefsConfigUi")
         if not userCancelled:
@@ -88,7 +89,7 @@ class Plugin(indigo.PluginBase):
             if self.debug:
                 self.logger.debug("Debug logging enabled")
 
-    ########################################
+    #-------------------------------------------------------------------------------
     def validatePrefsConfigUi(self, valuesDict):
         self.logger.debug("validatePrefsConfigUi")
         errorsDict = indigo.Dict()
@@ -98,7 +99,7 @@ class Plugin(indigo.PluginBase):
             return (False, valuesDict, errorsDict)
         return (True, valuesDict)
     
-    ########################################
+    #-------------------------------------------------------------------------------
     def runConcurrentThread(self):
         lastIdentify = lastTouchDisk = 0
         self.sleep(self.stateLoopFreq)
@@ -120,9 +121,9 @@ class Plugin(indigo.PluginBase):
         except self.StopThread:
             pass    # Optionally catch the StopThread exception and do any needed cleanup.
     
-    ########################################
+    #-------------------------------------------------------------------------------
     # Device Methods
-    ########################################
+    #-------------------------------------------------------------------------------
     def deviceStartComm(self, dev):
         self.logger.debug("deviceStartComm: "+dev.name)
         if dev.version != self.pluginVersion:
@@ -131,13 +132,13 @@ class Plugin(indigo.PluginBase):
             self.deviceDict[dev.id] = self.DiskDevice(dev, self)
             self.deviceDict[dev.id].update(True)
     
-    ########################################
+    #-------------------------------------------------------------------------------
     def deviceStopComm(self, dev):
         self.logger.debug("deviceStopComm: "+dev.name)
         if dev.id in self.deviceDict:
             del self.deviceDict[dev.id]
     
-    ########################################
+    #-------------------------------------------------------------------------------
     def validateDeviceConfigUi(self, valuesDict, deviceTypeId, devId, runtime=False):
         self.logger.debug("validateDeviceConfigUi: " + deviceTypeId)
         errorsDict = indigo.Dict()
@@ -165,7 +166,7 @@ class Plugin(indigo.PluginBase):
         else:
             return (True, valuesDict)
     
-    ########################################
+    #-------------------------------------------------------------------------------
     def updateDeviceVersion(self, dev):
         theProps = dev.pluginProps
         # update states
@@ -177,9 +178,9 @@ class Plugin(indigo.PluginBase):
         dev.replacePluginPropsOnServer(theProps)
     
     
-    ########################################
+    #-------------------------------------------------------------------------------
     # Action Methods
-    ########################################
+    #-------------------------------------------------------------------------------
     def actionControlDimmerRelay(self, action, dev):
         self.logger.debug("actionControlDimmerRelay: "+dev.name)
         disk = self.deviceDict[dev.id]
@@ -201,9 +202,9 @@ class Plugin(indigo.PluginBase):
         else:
             self.logger.debug('"{0}" {1} request ignored'.format(dev.name, str(action.deviceAction)))
     
-    ########################################
+    #-------------------------------------------------------------------------------
     # Menu Methods
-    ########################################
+    #-------------------------------------------------------------------------------
     def toggleDebug(self):
         if self.debug:
             self.logger.debug("Debug logging disabled")
@@ -213,9 +214,9 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("Debug logging enabled")
     
     
-    ########################################
+    #-------------------------------------------------------------------------------
     # Properties
-    ########################################
+    #-------------------------------------------------------------------------------
     @property
     def dfResults(self):
         if self._dfRefresh:
@@ -225,7 +226,7 @@ class Plugin(indigo.PluginBase):
                 self._dfRefresh = False
         return self._dfData
     
-    ########################################
+    #-------------------------------------------------------------------------------
     @property
     def duResults(self):
         if self._duRefresh:
@@ -235,18 +236,18 @@ class Plugin(indigo.PluginBase):
                 self._duRefresh = False
         return self._duData
         
-    ########################################
+    #-------------------------------------------------------------------------------
     def refresh_data(self):
         self._dfRefresh = self._duRefresh = True        
     
     
     
-    ########################################
+    ###############################################################################
     # Classes
-    ########################################
-    ########################################
+    ###############################################################################
     class DiskDevice(object):
-        ########################################
+        
+        #-------------------------------------------------------------------------------
         def __init__(self, instance, plugin):
             self.dev        = instance
             self.name       = self.dev.name
@@ -260,7 +261,7 @@ class Plugin(indigo.PluginBase):
             self.touchCmd   = k_touchDiskCmd( mountpoint = cmd_quote(self.props['mountPoint']) )
             
 
-        ########################################
+        #-------------------------------------------------------------------------------
         def update(self, doIdentify=False, doTouchDisk=False):
             if not self.states['identifier'] or doIdentify:
                 self.getIdentifier()
@@ -270,7 +271,7 @@ class Plugin(indigo.PluginBase):
                 self.touchDisk()
             self.saveStates()
         
-        ########################################
+        #-------------------------------------------------------------------------------
         def getIdentifier(self):
             if self.type == 'localDisk':
                 self.logger.debug('getting identifier for volume "{0}"'.format(self.props['volumeName']))
@@ -291,11 +292,11 @@ class Plugin(indigo.PluginBase):
                 self.states['identifier'] = identifier
                 self.states['disk_type']  = parsed.scheme
         
-        ########################################
+        #-------------------------------------------------------------------------------
         def updateOnOff(self):
             self.states['onOffState'] = bool(self.dfInfo)
         
-        ########################################
+        #-------------------------------------------------------------------------------
         def updateStats(self):
             if self.onState:
                 diskStats = regextract(self.dfInfo, k_dfInfoGroupsRegex, k_dfInfoGroupsKeys)
@@ -308,7 +309,7 @@ class Plugin(indigo.PluginBase):
                 self.states['size_used']    = mb_to_string(int(diskStats['used']))
                 self.states['size_free']    = mb_to_string(int(diskStats['free']))
                 
-        ########################################
+        #-------------------------------------------------------------------------------
         def touchDisk(self):
             if self.props['preventSleep'] and self.onState:
                 self.logger.debug('touching file on volume "{0}"'.format(self.props['volumeName']))
@@ -319,7 +320,7 @@ class Plugin(indigo.PluginBase):
                     self.logger.error('touch disk "{0}" failed'.format(self.props['volumeName']))
                     self.logger.debug(response)
         
-        ########################################
+        #-------------------------------------------------------------------------------
         def saveStates(self):    
             newStates = []
             for key, value in self.states.iteritems():
@@ -344,9 +345,9 @@ class Plugin(indigo.PluginBase):
                 self.states = self.dev.states
         
         
-        ########################################
+        #-------------------------------------------------------------------------------
         # Class Properties
-        ########################################
+        #-------------------------------------------------------------------------------
         def onStateGet(self):
             return self.states['onOffState']
         
@@ -364,7 +365,7 @@ class Plugin(indigo.PluginBase):
         
         onState = property(onStateGet, onStateSet)
         
-        ########################################
+        #-------------------------------------------------------------------------------
         @property
         def onOffCmds(self):
             onCmd = offCmd = k_returnFalseCmd( message = "not available" )
@@ -384,7 +385,7 @@ class Plugin(indigo.PluginBase):
             
             return (offCmd,onCmd)
         
-        ########################################
+        #-------------------------------------------------------------------------------
         @property
         def dfInfo(self):
             match = re.search(self.dfPattern, self.plugin.dfResults, re.MULTILINE)
@@ -408,22 +409,22 @@ class Plugin(indigo.PluginBase):
     
     
     
-########################################
+###############################################################################
 # Utilities
-########################################
+###############################################################################
 def do_shell_script (cmd):
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, err = p.communicate()
     return (not bool(p.returncode)), out.rstrip()
 
-########################################
+#-------------------------------------------------------------------------------
 def regextract (source, rule, keys):
     results = {}
     for key, value in zip(keys,rule.match(source).groups()):
         results[key] = value.strip()
     return results
         
-########################################
+#-------------------------------------------------------------------------------
 # http://stackoverflow.com/questions/7160737/python-how-to-validate-a-url-in-python-malformed-or-not#7160819
 def is_valid_url(url, qualifying=None):
     min_attributes = ('scheme', 'netloc')
@@ -432,7 +433,7 @@ def is_valid_url(url, qualifying=None):
     return all([getattr(token, qualifying_attr)
                 for qualifying_attr in qualifying])
 
-########################################
+#-------------------------------------------------------------------------------
 # http://stackoverflow.com/questions/12523586/python-format-size-application-converting-b-to-kb-mb-gb-tb#12523683
 def mb_to_string(unitCount, precision=2):
     if unitCount < 0:
