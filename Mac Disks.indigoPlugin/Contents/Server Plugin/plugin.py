@@ -183,7 +183,7 @@ class Plugin(indigo.PluginBase):
     #-------------------------------------------------------------------------------
     def actionControlDimmerRelay(self, action, dev):
         self.logger.debug("actionControlDimmerRelay: "+dev.name)
-        disk = self.deviceDict[dev.id]
+        diskDev = self.deviceDict[dev.id]
         # TURN ON
         if action.deviceAction == indigo.kDimmerRelayAction.TurnOn:
             diskDev.onState = True
