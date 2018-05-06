@@ -48,6 +48,18 @@
         <Label>How often to confirm/reset the logical attachment point of a disk. Only matters for removable drives remounted after long absence.
         </Label>
     </Field>
+    <Field id='mountMethodSeparator' type='separator' />
+    <Field id='networkMountMethod' type='menu' defaultValue='mount'>
+        <Label>Network mount method:</Label>
+        <List>
+            <Option value='mount'>'mount' command</Option>
+            <Option value='open'>'open' command</Option>
+        </List>
+    </Field>
+    <Field id='networkMountHelp' type='label' fontColor='darkgray' fontSize='small' alignWithControl='false'>
+        <Label>On newer operating systems, the plugin is forbidden from writing to /Volumes.  If you experience issues mounting netwok shares, switch to the 'open' command method.  (This will also cause Finder windows to open when disks are mounted.)
+        </Label>
+    </Field>
     <Field id='debugSeparator' type='separator' />
 	<Field id='showDebugInfo' type='checkbox'>
 		<Label>Enable debuging:</Label>

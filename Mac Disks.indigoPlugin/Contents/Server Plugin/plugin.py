@@ -26,6 +26,7 @@ k_diskStatusImage   = ( indigo.kStateImageSel.SensorOff, indigo.kStateImageSel.S
 k_localMountCmd     = "/usr/sbin/diskutil mount {identifier}".format
 k_localUnmountCmd   = "/usr/sbin/diskutil umount {force} {identifier}".format
 k_networkMountCmd   = "/bin/mkdir {mountpoint} 2>/dev/null; /sbin/mount -t {urlscheme} {volumeurl} {mountpoint}".format
+k_networkOpenCmd    = "open -g {volumeurl}".format
 k_networkUnmountCmd = "/sbin/umount {force} {identifier}".format
 
 k_dfGetDataCmd      = "/bin/df -mn"
@@ -66,6 +67,7 @@ class Plugin(indigo.PluginBase):
         self.stateLoopFreq  = int(self.pluginPrefs.get('stateLoopFreq','10'))
         self.identifyFreq   = int(self.pluginPrefs.get('identifyFreq','10'))*60
         self.touchDiskFreq  = int(self.pluginPrefs.get('touchDiskFreq','10'))*60
+        self.mountMethod    = self.pluginPrefs.get('networkMountMethod','mount')
         self.nextCheck      = self.pluginPrefs.get('nextUpdateCheck',0)
         self.debug          = self.pluginPrefs.get('showDebugInfo',False)
         self.logger.debug("startup")
@@ -92,7 +94,14 @@ class Plugin(indigo.PluginBase):
             self.stateLoopFreq  = int(valuesDict['stateLoopFreq'])
             self.identifyFreq   = int(valuesDict['identifyFreq'])*60
             self.touchDiskFreq  = int(valuesDict['touchDiskFreq'])*60
-            self.debug          =     valuesDict['showDebugInfo']
+
+            if valuesDict['networkMountMethod'] != self.mountMethod:
+                self.mountMethod = valuesDict['networkMountMethod']
+                for devId,intance in self.deviceDict.items():
+                    if intance.dev.deviceTypeId == 'networkDisk':
+                        self.deviceDict[devId] = NetworkDiskDevice(intance.dev, self)
+
+            self.debug = valuesDict['showDebugInfo']
             if self.debug:
                 self.logger.debug("Debug logging enabled")
 
@@ -452,9 +461,13 @@ class NetworkDiskDevice(DiskDevice):
         self.states['identifier'] = identifier
         self.states['disk_type']  = parsed.scheme
 
-        self.onCmd  = k_networkMountCmd(    mountpoint  = cmd_quote(self.props['mountPoint']),
+        if plugin.mountMethod == 'mount':
+            self.onCmd  = k_networkMountCmd(mountpoint  = cmd_quote(self.props['mountPoint']),
                                             volumeurl   = cmd_quote(self.props['volumeURL']),
                                             urlscheme   =           self.props['urlScheme'] )
+        else:
+            self.onCmd  = k_networkOpenCmd( volumeurl   = cmd_quote(self.props['volumeURL']) )
+
         self.offCmd = k_networkUnmountCmd(  identifier  = cmd_quote(identifier),
                                             force       = ['','-f'][self.props['forceUnmount']] )
 
